@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Product Tracking</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='styles.css') }}" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-5">
+        <div class="card">
+            <div class="card-header bg-warning text-dark">
+                <h3>Cognex Product Tracking</h3>
+            </div>
+            <div class="card-body">
+                <form id="checkout-form">
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label for="employee_id">Employee ID</label>
+                            <input type="text" class="form-control" id="employee_id" required>
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label for="employee_name">Employee Name</label>
+                            <input type="text" class="form-control" id="employee_name" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label for="crm_counter">CRM Counter</label>
+                            <input type="text" class="form-control" id="crm_counter" placeholder="Enter CRM Counter" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="product_serial_numbers">Product Serial Numbers (comma or new line separated)</label>
+                        <textarea class="form-control" id="product_serial_numbers" rows="5" required></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Check Out</button>
+                    <button type="button" class="btn btn-success" onclick="checkinProducts()">Check In</button>
+                    <button type="button" class="btn btn-info" onclick="previewReport()">Preview Report</button>
+                </form>
+                <div id="message" class="mt-3"></div> <!-- For displaying messages -->
+                <div id="report-preview" class="mt-3" style="display: none;"></div> <!-- For displaying report preview -->
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/0.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/1.3.4/jspdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.13/jspdf.plugin.autotable.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            $('#checkout-form').on('submit', function(event) {
+                event.preventDefault();
+                checkoutProducts();
+            });
+        });
+
+        function showMessage(message, type) {
+            const messageDiv = $('#message');
+
+            if (message.includes('The following product(s) are already checked out') || 
+                message.includes('The following product(s) were not checked out')) {
+                messageDiv.html(`<div class="alert alert-warning">${message}</div>`);
+            } else {
+                messageDiv.html(`<div class="alert alert-${type}">${message}</div>`);
+            }
+
+            messageDiv.show();
+            setTimeout(() => {
+                messageDiv.fadeOut('slow', () => messageDiv.html(''));
+            }, 1500);
+        }
+
+        function checkoutProducts() {
+            const employeeId = $('#employee_id').val();
+            const employeeName = $('#employee_name').val();
+            const crmCounter = $('#crm_counter').val();
+            const productSerialNumbers = $('#product_serial_numbers').val().split(/[,|\n]+/).map(s => s.trim()).filter(Boolean);
+
+            $.ajax({
+                url: '/checkout',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    employee_id: employeeId,
+                    employee_name: employeeName,
+                    crm_counter: crmCounter,
+                    product_serial_numbers: productSerialNumbers
+                }),
+                success: function(response) {
+                    if (response.message) {
+                        showMessage(response.message, 'success');
+                    }
+                },
+                error: function(response) {
+                    showMessage(response.responseJSON.error, 'danger');
+                }
+            });
+        }
+
+        function checkinProducts() {
+            const employeeId = $('#employee_id').val();
+            const employeeName = $('#employee_name').val();
+            const crmCounter = $('#crm_counter').val();
+            const productSerialNumbers = $('#product_serial_numbers').val().split(/[,|\n]+/).map(s => s.trim()).filter(Boolean);
+
+            $.ajax({
+                url: '/checkin',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    employee_id: employeeId,
+                    employee_name: employeeName,
+                    crm_counter: crmCounter,
+                    product_serial_numbers: productSerialNumbers
+                }),
+                success: function(response) {
+                    if (response.message) {
+                        showMessage(response.message, 'success');
+                    }
+                },
+                error: function(response) {
+                    showMessage(response.responseJSON.error, 'danger');
+                }
+            });
+        }
+
+        function previewReport() {
+    const employeeId = $('#employee_id').val();
+    const employeeName = $('#employee_name').val();
+    const crmCounter = $('#crm_counter').val();
+    const productSerialNumbers = $('#product_serial_numbers').val().split(/[,|\n]+/).map(s => s.trim()).filter(Boolean);
+
+    // Send a request to fetch product descriptions
+    $.ajax({
+    url: '/get_product_details',
+    method: 'POST',
+    contentType: 'application/json',
+    data: JSON.stringify({ product_serial_numbers: productSerialNumbers }),
+    success: function(response) {
+        const productDetails = response.product_details;
+
+        let reportHtml = `<h4>Preview Report</h4>
+                          <p><strong>Employee ID:</strong> ${employeeId}</p>
+                          <p><strong>Employee Name:</strong> ${employeeName}</p>
+                          <p><strong>CRM Counter:</strong> ${crmCounter}</p>
+                          <p><strong>Product Serial Numbers with Descriptions:</strong></p>
+                          <ul>`;
+
+        productDetails.forEach(product => {
+            reportHtml += `<li><strong>Serial Number:</strong> ${product.Product_Serial_Number} 
+                           - <strong>Description:</strong> ${product.Product_Description}</li>`;
+        });
+
+        reportHtml += `</ul>
+                       <button class="btn btn-success" onclick="previewReportPdf()">Download Report</button>`;
+
+        $('#report-preview').html(reportHtml).show();
+    },
+    error: function(response) {
+        showMessage(response.responseJSON.error, 'danger');
+    }
+});
+        }
+       
+        function previewReportPdf() {
+    const employeeId = $('#employee_id').val();
+    const employeeName = $('#employee_name').val();
+    const crmCounter = $('#crm_counter').val();
+    const productSerialNumbers = $('#product_serial_numbers').val().split(/[,|\n]+/).map(s => s.trim()).filter(Boolean);
+
+    // Get the current date and time for checkout
+    const now = new Date();
+    const checkoutDateTime = now.toLocaleString(); // This will format date and time based on locale
+
+    // Fetch product details with descriptions from the server
+    $.ajax({
+        url: '/get_product_details',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ product_serial_numbers: productSerialNumbers }),
+        success: function(response) {
+            const productDetails = response.product_details;
+
+            const doc = new jsPDF();
+
+            // Add header - replicating the yellow bar and Cognex styling
+            doc.setFillColor(255, 255, 0); // Yellow color
+            doc.rect(0, 0, 210, 15, 'F'); // Header bar (height adjusted to 15)
+            doc.setTextColor(0, 0, 0); // Black color for Cognex
+            doc.setFontSize(26); // Larger font size for Cognex
+            doc.setFont('helvetica', 'bold'); // Set font to bold
+
+            // Get width of "Cognex" and center it
+            const cognexText = 'Cognex';
+            const textWidth = doc.getTextWidth(cognexText);
+            const pageWidth = 210; // A4 size in mm
+            const xPosition = (pageWidth - textWidth) / 2; // Calculate center position
+
+            doc.text(cognexText, xPosition, 10); // Text positioned at the calculated center
+
+            // Add report content in bold for field names and normal for values
+            doc.setFontSize(12); // Adjust content font size
+            let lineHeight = 10;
+            let yPosition = 40; // Adjusted for spacing from header
+
+            doc.setFont('helvetica', 'bold');
+            doc.text('Employee ID:', 10, yPosition);
+            doc.setFont('helvetica', 'normal');
+            doc.text(employeeId, 50, yPosition);
+
+            yPosition += lineHeight;
+
+            doc.setFont('helvetica', 'bold');
+            doc.text('Employee Name:', 10, yPosition);
+            doc.setFont('helvetica', 'normal');
+            doc.text(employeeName, 50, yPosition);
+
+            yPosition += lineHeight;
+
+            doc.setFont('helvetica', 'bold');
+            doc.text('CRM Counter:', 10, yPosition);
+            doc.setFont('helvetica', 'normal');
+            doc.text(crmCounter, 50, yPosition);
+
+            yPosition += lineHeight;
+
+            // Add Checkout Date and Time
+            doc.setFont('helvetica', 'bold');
+            doc.text('Checkout Date & Time:', 10, yPosition);
+            doc.setFont('helvetica', 'normal');
+            doc.text(checkoutDateTime, 60, yPosition);
+
+            yPosition += lineHeight;
+
+            doc.setFont('helvetica', 'bold');
+            doc.text('Product Serial Numbers with Descriptions:', 10, yPosition);
+            
+            yPosition += lineHeight;
+
+            // Loop through product serial numbers and descriptions, and add them as bullet points
+            doc.setFont('helvetica', 'normal');
+            productDetails.forEach((product) => {
+                doc.text(`• ${product.Product_Serial_Number}: ${product.Product_Description}`, 15, yPosition);
+                yPosition += lineHeight;
+            });
+
+            // Add footer - replicating the yellow bar and Cognex styling
+            doc.setFillColor(255, 255, 0); // Yellow color for footer
+            doc.rect(0, 280, 210, 15, 'F'); // Footer bar (height 15 for footer)
+            doc.setTextColor(0, 0, 0); // Black color for Cognex
+            doc.setFontSize(26); // Larger font size for Cognex
+            doc.setFont('helvetica', 'bold'); // Set font to bold
+
+            // Center "Cognex" in the footer
+            doc.text(cognexText, xPosition, 290); // Text positioned at the calculated center for footer
+
+            // Open the PDF in a new browser tab for preview
+            window.open(doc.output('bloburl'), '_blank'); // Open PDF in a new tab
+        },
+        error: function(response) {
+            showMessage(response.responseJSON.error, 'danger');
+        }
+    });
+}
+
+</script>
+</body>
+</html>
