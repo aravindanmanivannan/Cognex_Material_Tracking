@@ -3,3 +3,4 @@ openpyxl
 flask
 mysql 
 mysql-connector-python
+flask-mail

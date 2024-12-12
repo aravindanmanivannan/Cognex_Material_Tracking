@@ -3,6 +3,10 @@
 from flask import Flask, request, jsonify, render_template
 import mysql.connector
 from mysql.connector import Error
+from flask_mail import Mail, Message
+import os 
+print(os.path.exists("output.pdf"))
+
 
 app = Flask(__name__)
 
@@ -20,6 +24,19 @@ def get_db_connection():
         print(f"Error: {e}")
         return None
 
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
+
+# Email details
+SENDER_EMAIL = "aravind25mani@gmail.com"  # Your email address
+RECEIVER_EMAIL = "aravindan.m@cognex.com"  # Main recipient
+PASSWORD = "ssrl czdy owhh okgw"  # Your app password
+SUBJECT = "PDF Attachment with CC"
+PDF_PATH = "output.pdf"  # Path to your PDF file
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -30,7 +47,10 @@ def checkout():
         data = request.json
         employee_id = str(data['employee_id'])
         employee_name = data.get('employee_name', '')
+        employee_email = data.get('employee_email', '')
         crm_counter = str(data.get('crm_counter', ''))
+        company_name = data.get('company_name', '')
+        preferred_checkin_date = data.get('preferred_checkin_date', '')
         product_serial_numbers = [str(sn) for sn in data['product_serial_numbers']]
 
         connection = get_db_connection()
@@ -53,9 +73,9 @@ def checkout():
                 already_out_products.append(serial_number)
             else:
                 cursor.execute(
-                    "INSERT INTO cognex_units (Employee_ID, Employee_Name, CRM_Counter, Product_Serial_Number, Status, out_timestamp) "
-                    "VALUES (%s, %s, %s, %s, 'out', NOW())",
-                    (employee_id, employee_name, crm_counter, serial_number)
+                    "INSERT INTO cognex_units (Employee_ID, Employee_Name, Employee_Email, CRM_Counter, Company_Name, Preferred_Checkin_Date, Product_Serial_Number, Status, out_timestamp) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, 'out', NOW())",
+                    (employee_id, employee_name, employee_email, crm_counter, company_name, preferred_checkin_date, serial_number)
                 )
                 successful_checkout_products.append(serial_number)
 
@@ -175,6 +195,57 @@ def get_product_details():
     except Exception as e:
         print(f"Error fetching product details: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/send-email', methods=['POST'])
+def send_email():
+    try:
+        # Extract data from the request
+        data = request.json
+        cc_email = data.get('employee_email')  # Get CC email from request
+
+        if not cc_email:
+            return jsonify({"error": "CC email is required."}), 400
+
+        # Create the email
+        msg = MIMEMultipart()
+        msg["From"] = SENDER_EMAIL
+        msg["To"] = RECEIVER_EMAIL
+        msg["Cc"] = cc_email  # Add CC recipient
+        msg["Subject"] = SUBJECT
+
+        # Email body
+        body = """Hi,
+                 Please find the attached PDF document.
+Thanks"""
+        msg.attach(MIMEText(body, "plain"))
+
+        # Attach the PDF file
+        if not os.path.exists(PDF_PATH):
+            return jsonify({"error": "PDF file not found."}), 404
+
+        with open(PDF_PATH, "rb") as attachment:
+            part = MIMEBase("application", "octet-stream")
+            part.set_payload(attachment.read())
+        encoders.encode_base64(part)
+        part.add_header(
+            "Content-Disposition",
+            f"attachment; filename={os.path.basename(PDF_PATH)}",
+        )
+        msg.attach(part)
+
+        # Connect to the SMTP server and send the email
+        server = smtplib.SMTP("smtp.gmail.com", 587)
+        server.starttls()
+        server.login(SENDER_EMAIL, PASSWORD)
+        # Send email to main recipient and CC recipient
+        server.sendmail(SENDER_EMAIL, [RECEIVER_EMAIL, cc_email], msg.as_string())
+        server.quit()
+
+        return jsonify({"message": "Email sent successfully!"}), 200
+
+    except Exception as e:
+        print(f"Error: {e}")
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     # app.run(host='192.168.12.107', port=5252, debug=True)

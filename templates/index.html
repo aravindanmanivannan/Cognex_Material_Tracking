@@ -16,19 +16,27 @@
             <div class="card-body">
                 <form id="checkout-form">
                     <div class="form-row">
-                        <div class="form-group col-md-6">
+                        <div class="form-group col-md-4">
                             <label for="employee_id">Employee ID</label>
                             <input type="text" class="form-control" id="employee_id" required>
                         </div>
-                        <div class="form-group col-md-6">
+                        <div class="form-group col-md-4">
                             <label for="employee_name">Employee Name</label>
                             <input type="text" class="form-control" id="employee_name" required>
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label for="employee_email">Employee Email</label>
+                            <input type="email" class="form-control" id="employee_email" placeholder="Enter Employee Email" required>
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group col-md-6">
                             <label for="crm_counter">CRM Counter</label>
                             <input type="text" class="form-control" id="crm_counter" placeholder="Enter CRM Counter" required>
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label for="company_name">Company Name</label>
+                            <input type="text" class="form-control" id="company_name" placeholder="Enter Employee Email" required>
                         </div>
                     </div>
                     <div class="form-group">
@@ -38,6 +46,11 @@
                     <button type="submit" class="btn btn-primary">Check Out</button>
                     <button type="button" class="btn btn-success" onclick="checkinProducts()">Check In</button>
                     <button type="button" class="btn btn-info" onclick="previewReport()">Preview Report</button>
+                    <div class="form-group">
+                        <label for="preferred_checkin_date">Preferred Check-In Date</label>
+                        <input type="date" class="form-control" id="preferred_checkin_date" required>
+                        <button type="button" class="btn btn-warning mt-2" onclick="sendEmail()">Send Email</button>
+                    </div>
                 </form>
                 <div id="message" class="mt-3"></div> <!-- For displaying messages -->
                 <div id="report-preview" class="mt-3" style="display: none;"></div> <!-- For displaying report preview -->
@@ -77,7 +90,10 @@
         function checkoutProducts() {
             const employeeId = $('#employee_id').val();
             const employeeName = $('#employee_name').val();
+            const employeeEmail = $('#employee_email').val();
             const crmCounter = $('#crm_counter').val();
+            const companyName = $('#company_name').val();
+            const preferredCheckinDate = $('#preferred_checkin_date').val();            
             const productSerialNumbers = $('#product_serial_numbers').val().split(/[,|\n]+/).map(s => s.trim()).filter(Boolean);
 
             $.ajax({
@@ -87,7 +103,10 @@
                 data: JSON.stringify({
                     employee_id: employeeId,
                     employee_name: employeeName,
+                    employee_email: employeeEmail,
                     crm_counter: crmCounter,
+                    company_name: companyName,
+                    preferred_checkin_date : preferredCheckinDate,
                     product_serial_numbers: productSerialNumbers
                 }),
                 success: function(response) {
@@ -104,7 +123,10 @@
         function checkinProducts() {
             const employeeId = $('#employee_id').val();
             const employeeName = $('#employee_name').val();
+            const employeeEmail = $('#employee_email').val();
             const crmCounter = $('#crm_counter').val();
+            const companyName = $('#company_name').val();
+            const preferredCheckinDate = $('#preferred_checkin_date').val();            
             const productSerialNumbers = $('#product_serial_numbers').val().split(/[,|\n]+/).map(s => s.trim()).filter(Boolean);
 
             $.ajax({
@@ -114,7 +136,10 @@
                 data: JSON.stringify({
                     employee_id: employeeId,
                     employee_name: employeeName,
+                    employee_email: employeeEmail,
                     crm_counter: crmCounter,
+                    company_name: companyName,
+                    preferred_checkin_date : preferredCheckinDate,
                     product_serial_numbers: productSerialNumbers
                 }),
                 success: function(response) {
@@ -131,7 +156,10 @@
         function previewReport() {
     const employeeId = $('#employee_id').val();
     const employeeName = $('#employee_name').val();
+    const employeeEmail = $('#employee_email').val();
     const crmCounter = $('#crm_counter').val();
+    const companyName = $('#company_name').val();
+    const preferredCheckinDate = $('#preferred_checkin_date').val();            
     const productSerialNumbers = $('#product_serial_numbers').val().split(/[,|\n]+/).map(s => s.trim()).filter(Boolean);
 
     // Send a request to fetch product descriptions
@@ -146,7 +174,10 @@
         let reportHtml = `<h4>Preview Report</h4>
                           <p><strong>Employee ID:</strong> ${employeeId}</p>
                           <p><strong>Employee Name:</strong> ${employeeName}</p>
+                          <p><strong>Employee Email:</strong> ${employeeEmail}</p>
                           <p><strong>CRM Counter:</strong> ${crmCounter}</p>
+                          <p><strong>Company Name:</strong> ${companyName}</p>
+                          <p><strong>Preferred Check-In Date :</strong> ${preferredCheckinDate}</p>
                           <p><strong>Product Serial Numbers with Descriptions:</strong></p>
                           <ul>`;
 
@@ -169,7 +200,10 @@
         function previewReportPdf() {
     const employeeId = $('#employee_id').val();
     const employeeName = $('#employee_name').val();
+    const employeeEmail = $('#employee_email').val();
     const crmCounter = $('#crm_counter').val();
+    const companyName = $('#company_name').val();
+    const preferredCheckinDate = $('#preferred_checkin_date').val();            
     const productSerialNumbers = $('#product_serial_numbers').val().split(/[,|\n]+/).map(s => s.trim()).filter(Boolean);
 
     // Get the current date and time for checkout
@@ -222,9 +256,23 @@
             yPosition += lineHeight;
 
             doc.setFont('helvetica', 'bold');
+            doc.text('Employee Email:', 10, yPosition);
+            doc.setFont('helvetica', 'normal');
+            doc.text(employeeEmail, 50, yPosition);
+
+            yPosition += lineHeight;
+
+            doc.setFont('helvetica', 'bold');
             doc.text('CRM Counter:', 10, yPosition);
             doc.setFont('helvetica', 'normal');
             doc.text(crmCounter, 50, yPosition);
+
+            yPosition += lineHeight;
+
+            doc.setFont('helvetica', 'bold');
+            doc.text('Company Name:', 10, yPosition);
+            doc.setFont('helvetica', 'normal');
+            doc.text(companyName, 50, yPosition);
 
             yPosition += lineHeight;
 
@@ -233,6 +281,13 @@
             doc.text('Checkout Date & Time:', 10, yPosition);
             doc.setFont('helvetica', 'normal');
             doc.text(checkoutDateTime, 60, yPosition);
+
+            yPosition += lineHeight;
+
+            doc.setFont('helvetica', 'bold');
+            doc.text('Preferred Check-In Date:', 10, yPosition);
+            doc.setFont('helvetica', 'normal');
+            doc.text(preferredCheckinDate, 60, yPosition);
 
             yPosition += lineHeight;
 
@@ -265,6 +320,35 @@
             showMessage(response.responseJSON.error, 'danger');
         }
     });
+}
+
+        function sendEmail() {
+    const employeeEmail = document.getElementById("employee_email").value;
+
+    if (!employeeEmail) {
+        alert("Please enter the Employee Email.");
+        return;
+    }
+
+    fetch('/send-email', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ employee_email: employeeEmail }),
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                alert(`Error: ${data.error}`);
+            } else {
+                alert("Email sent successfully!");
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert("An error occurred while sending the email.");
+        });
 }
 
 </script>
