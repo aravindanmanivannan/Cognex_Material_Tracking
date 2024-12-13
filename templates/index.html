@@ -36,25 +36,39 @@
                         </div>
                         <div class="form-group col-md-6">
                             <label for="company_name">Company Name</label>
-                            <input type="text" class="form-control" id="company_name" placeholder="Enter Employee Email" required>
+                            <input type="text" class="form-control" id="company_name" placeholder="Enter Company Name" required>
                         </div>
                     </div>
                     <div class="form-group">
                         <label for="product_serial_numbers">Product Serial Numbers (comma or new line separated)</label>
                         <textarea class="form-control" id="product_serial_numbers" rows="5" required></textarea>
                     </div>
-                    <button type="submit" class="btn btn-primary">Check Out</button>
-                    <button type="button" class="btn btn-success" onclick="checkinProducts()">Check In</button>
-                    <button type="button" class="btn btn-info" onclick="previewReport()">Preview Report</button>
-                    <div class="form-group">
-                        <label for="preferred_checkin_date">Preferred Check-In Date</label>
-                        <input type="date" class="form-control" id="preferred_checkin_date" required>
-                        <button type="button" class="btn btn-warning mt-2" onclick="sendEmail()">Send Email</button>
+                    <div class="form-row align-items-center">
+                        <button type="submit" class="btn btn-primary mr-2">Check Out</button>
+                        <div class="form-group col-md-3">
+                            <label for="preferred_checkin_date">Preferred Check-In Date</label>
+                            <input type="date" class="form-control" id="preferred_checkin_date" required>
+                        </div>
+                        <button type="button" class="btn btn-success ml-2" onclick="checkinProducts()">Check In</button>
+                        <button type="button" class="btn btn-info ml-2" onclick="previewReport()">Preview Report</button>
+                    </div>
+                    <div class="form-row mt-3">
+                        <div class="form-group col-md-6">
+                            <label for="file_upload">Upload PDF</label>
+                            <input type="file" class="form-control" id="file_upload" accept=".pdf">
+                        </div>
+                        <div class="form-group col-md-6 d-flex align-items-end">
+                            <button type="button" class="btn btn-warning w-100" onclick="sendEmail()">Send Email</button>
+                        </div>
                     </div>
                 </form>
                 <div id="message" class="mt-3"></div> <!-- For displaying messages -->
                 <div id="report-preview" class="mt-3" style="display: none;"></div> <!-- For displaying report preview -->
             </div>
+            
+            
+            
+            
         </div>
     </div>
 
@@ -323,33 +337,41 @@
 }
 
         function sendEmail() {
-    const employeeEmail = document.getElementById("employee_email").value;
+            const employeeEmail = document.getElementById("employee_email").value;
+            const fileInput = document.getElementById("file_upload");
+            const file = fileInput.files[0];
 
-    if (!employeeEmail) {
-        alert("Please enter the Employee Email.");
-        return;
-    }
-
-    fetch('/send-email', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ employee_email: employeeEmail }),
-    })
-        .then(response => response.json())
-        .then(data => {
-            if (data.error) {
-                alert(`Error: ${data.error}`);
-            } else {
-                alert("Email sent successfully!");
+            if (!employeeEmail) {
+                alert("Please enter the Employee Email.");
+                return;
             }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert("An error occurred while sending the email.");
-        });
-}
+
+            if (!file) {
+                alert("Please upload a PDF file.");
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append("employee_email", employeeEmail);
+            formData.append("file", file);
+
+            fetch('/send-email', {
+                method: 'POST',
+                body: formData,
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        alert(`Error: ${data.error}`);
+                    } else {
+                        alert("Email sent successfully!");
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert("An error occurred while sending the email.");
+                });
+        }
 
 </script>
 </body>

@@ -199,18 +199,26 @@ def get_product_details():
 @app.route('/send-email', methods=['POST'])
 def send_email():
     try:
-        # Extract data from the request
-        data = request.json
-        cc_email = data.get('employee_email')  # Get CC email from request
+        # Extract the file and email from the request
+        employee_email = request.form.get('employee_email')
+        file = request.files.get('file')
 
-        if not cc_email:
-            return jsonify({"error": "CC email is required."}), 400
+        if not employee_email:
+            return jsonify({"error": "Employee email is required."}), 400
+
+        if not file or not file.filename.endswith('.pdf'):
+            return jsonify({"error": "A valid PDF file is required."}), 400
+
+        # Save the uploaded file temporarily
+        file_path = os.path.join("uploads", file.filename)
+        os.makedirs("uploads", exist_ok=True)
+        file.save(file_path)
 
         # Create the email
         msg = MIMEMultipart()
         msg["From"] = SENDER_EMAIL
         msg["To"] = RECEIVER_EMAIL
-        msg["Cc"] = cc_email  # Add CC recipient
+        msg["Cc"] = employee_email
         msg["Subject"] = SUBJECT
 
         # Email body
@@ -219,17 +227,14 @@ def send_email():
 Thanks"""
         msg.attach(MIMEText(body, "plain"))
 
-        # Attach the PDF file
-        if not os.path.exists(PDF_PATH):
-            return jsonify({"error": "PDF file not found."}), 404
-
-        with open(PDF_PATH, "rb") as attachment:
+        # Attach the uploaded PDF
+        with open(file_path, "rb") as attachment:
             part = MIMEBase("application", "octet-stream")
             part.set_payload(attachment.read())
         encoders.encode_base64(part)
         part.add_header(
             "Content-Disposition",
-            f"attachment; filename={os.path.basename(PDF_PATH)}",
+            f"attachment; filename={os.path.basename(file_path)}",
         )
         msg.attach(part)
 
@@ -237,9 +242,11 @@ Thanks"""
         server = smtplib.SMTP("smtp.gmail.com", 587)
         server.starttls()
         server.login(SENDER_EMAIL, PASSWORD)
-        # Send email to main recipient and CC recipient
-        server.sendmail(SENDER_EMAIL, [RECEIVER_EMAIL, cc_email], msg.as_string())
+        server.sendmail(SENDER_EMAIL, [RECEIVER_EMAIL, employee_email], msg.as_string())
         server.quit()
+
+        # Clean up the uploaded file
+        os.remove(file_path)
 
         return jsonify({"message": "Email sent successfully!"}), 200
 
