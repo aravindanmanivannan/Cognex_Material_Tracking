@@ -1,9 +1,11 @@
 
 
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template,send_from_directory
 import mysql.connector
 from mysql.connector import Error
 from flask_mail import Mail, Message
+from datetime import datetime
+
 import os 
 print(os.path.exists("output.pdf"))
 
@@ -16,7 +18,7 @@ def get_db_connection():
         connection = mysql.connector.connect(
             host='localhost',
             user='root',
-            password='CognexIndia@32',
+            password='Cognex@123',
             database='cognex_products'
         )
         return connection
@@ -199,18 +201,26 @@ def get_product_details():
 @app.route('/send-email', methods=['POST'])
 def send_email():
     try:
-        # Extract data from the request
-        data = request.json
-        cc_email = data.get('employee_email')  # Get CC email from request
+        # Extract the file and email from the request
+        employee_email = request.form.get('employee_email')
+        file = request.files.get('file')
 
-        if not cc_email:
-            return jsonify({"error": "CC email is required."}), 400
+        if not employee_email:
+            return jsonify({"error": "Employee email is required."}), 400
+
+        if not file or not file.filename.endswith('.pdf'):
+            return jsonify({"error": "A valid PDF file is required."}), 400
+
+        # Save the uploaded file temporarily
+        file_path = os.path.join("uploads", file.filename)
+        os.makedirs("uploads", exist_ok=True)
+        file.save(file_path)
 
         # Create the email
         msg = MIMEMultipart()
         msg["From"] = SENDER_EMAIL
         msg["To"] = RECEIVER_EMAIL
-        msg["Cc"] = cc_email  # Add CC recipient
+        msg["Cc"] = employee_email
         msg["Subject"] = SUBJECT
 
         # Email body
@@ -219,17 +229,14 @@ def send_email():
 Thanks"""
         msg.attach(MIMEText(body, "plain"))
 
-        # Attach the PDF file
-        if not os.path.exists(PDF_PATH):
-            return jsonify({"error": "PDF file not found."}), 404
-
-        with open(PDF_PATH, "rb") as attachment:
+        # Attach the uploaded PDF
+        with open(file_path, "rb") as attachment:
             part = MIMEBase("application", "octet-stream")
             part.set_payload(attachment.read())
         encoders.encode_base64(part)
         part.add_header(
             "Content-Disposition",
-            f"attachment; filename={os.path.basename(PDF_PATH)}",
+            f"attachment; filename={os.path.basename(file_path)}",
         )
         msg.attach(part)
 
@@ -237,9 +244,11 @@ Thanks"""
         server = smtplib.SMTP("smtp.gmail.com", 587)
         server.starttls()
         server.login(SENDER_EMAIL, PASSWORD)
-        # Send email to main recipient and CC recipient
-        server.sendmail(SENDER_EMAIL, [RECEIVER_EMAIL, cc_email], msg.as_string())
+        server.sendmail(SENDER_EMAIL, [RECEIVER_EMAIL, employee_email], msg.as_string())
         server.quit()
+
+        # Clean up the uploaded file
+        os.remove(file_path)
 
         return jsonify({"message": "Email sent successfully!"}), 200
 
@@ -247,9 +256,104 @@ Thanks"""
         print(f"Error: {e}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/total_products.html')
+def serve_products_page():
+    return send_from_directory(app.static_folder, 'total_products.html')
+
+@app.route('/total_products', methods=['GET'])
+def get_all_products():
+    try:
+        connection = get_db_connection()
+        if connection is None:
+            return jsonify({'error': 'Database connection failed'}), 500
+        
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("SELECT Product_Serial_Number, Product_Description, Product_Part_Name FROM cognex_product_pool")
+        
+        products = cursor.fetchall()
+        
+        cursor.close()
+        connection.close()
+        
+        return jsonify({'products': products}), 200
+    except Exception as e:
+        print(f"Error fetching products: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/products_taken_out.html')
+def serve_products_taken_out_page():
+    return send_from_directory(app.static_folder, 'products_taken_out.html')
+
+@app.route('/products_taken_out', methods=['GET'])
+def get_products_taken_out():
+    try:
+        connection = get_db_connection()
+        if connection is None:
+            return jsonify({'error': 'Database connection failed'}), 500
+        
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT DISTINCT Employee_ID, Employee_Name, CRM_Counter, Product_Serial_Number, Status, 
+                   out_timestamp, Employee_Email, Company_Name, Preferred_Checkin_Date
+            FROM cognex_units
+            WHERE Status = 'out'
+        """)
+        
+        products_taken_out = cursor.fetchall()
+        
+        # Format out_timestamp to string before returning
+        for product in products_taken_out:
+            if isinstance(product['out_timestamp'], datetime):
+                product['out_timestamp'] = product['out_timestamp'].strftime('%Y-%m-%d %H:%M:%S')
+                
+        cursor.close()
+        connection.close()
+        
+        return jsonify({'products_out': products_taken_out}), 200
+    except Exception as e:
+        print(f"Error fetching products taken out: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/available_products.html')
+def serve_available_products_page():
+    return send_from_directory(app.static_folder, 'available_products.html')
+
+@app.route('/available_products', methods=['GET'])
+def get_available_products():
+    try:
+        connection = get_db_connection()
+        if connection is None:
+            return jsonify({'error': 'Database connection failed'}), 500
+        
+        cursor = connection.cursor(dictionary=True)
+        
+        # Step 1: Get all products from cognex_product_pool
+        cursor.execute("SELECT Product_Serial_Number, Product_Description, Product_Part_Name FROM cognex_product_pool")
+        all_products = cursor.fetchall()
+        
+        # Step 2: Get all products that are out from cognex_units
+        cursor.execute("""
+            SELECT DISTINCT Product_Serial_Number 
+            FROM cognex_units
+            WHERE Status = 'out'
+        """)
+        out_products = cursor.fetchall()
+
+        # Step 3: Filter out products that are marked as 'out'
+        out_product_serial_numbers = [product['Product_Serial_Number'] for product in out_products]
+        
+        # Filter products to only include those that are not in the out_products list
+        available_products = [product for product in all_products if product['Product_Serial_Number'] not in out_product_serial_numbers]
+        
+        cursor.close()
+        connection.close()
+        
+        # Return the available products
+        return jsonify({'available_products': available_products}), 200
+    except Exception as e:
+        print(f"Error fetching available products: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
-    # app.run(host='192.168.12.107', port=5252, debug=True)
+    # server = app.run(host='192.168.1.11', port=5252, debug=True)
     app.run(host='0.0.0.0', port=5252, debug=True)
-
-
-

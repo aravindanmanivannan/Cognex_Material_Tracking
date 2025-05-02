@@ -30,3 +30,19 @@ body {
     background-color: #218838;
     border-color: #218838;
 }
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.button-group {
+    display: flex;
+    gap: 10px;
+}
+
+button {
+    padding: 5px 10px;
+    cursor: pointer;
+}
