@@ -1,9 +1,11 @@
 
 
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template,send_from_directory
 import mysql.connector
 from mysql.connector import Error
 from flask_mail import Mail, Message
+from datetime import datetime
+
 import os 
 print(os.path.exists("output.pdf"))
 
@@ -16,7 +18,7 @@ def get_db_connection():
         connection = mysql.connector.connect(
             host='localhost',
             user='root',
-            password='CognexIndia@32',
+            password='Cognex@123',
             database='cognex_products'
         )
         return connection
@@ -254,9 +256,104 @@ Thanks"""
         print(f"Error: {e}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/total_products.html')
+def serve_products_page():
+    return send_from_directory(app.static_folder, 'total_products.html')
+
+@app.route('/total_products', methods=['GET'])
+def get_all_products():
+    try:
+        connection = get_db_connection()
+        if connection is None:
+            return jsonify({'error': 'Database connection failed'}), 500
+        
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("SELECT Product_Serial_Number, Product_Description, Product_Part_Name FROM cognex_product_pool")
+        
+        products = cursor.fetchall()
+        
+        cursor.close()
+        connection.close()
+        
+        return jsonify({'products': products}), 200
+    except Exception as e:
+        print(f"Error fetching products: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/products_taken_out.html')
+def serve_products_taken_out_page():
+    return send_from_directory(app.static_folder, 'products_taken_out.html')
+
+@app.route('/products_taken_out', methods=['GET'])
+def get_products_taken_out():
+    try:
+        connection = get_db_connection()
+        if connection is None:
+            return jsonify({'error': 'Database connection failed'}), 500
+        
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT DISTINCT Employee_ID, Employee_Name, CRM_Counter, Product_Serial_Number, Status, 
+                   out_timestamp, Employee_Email, Company_Name, Preferred_Checkin_Date
+            FROM cognex_units
+            WHERE Status = 'out'
+        """)
+        
+        products_taken_out = cursor.fetchall()
+        
+        # Format out_timestamp to string before returning
+        for product in products_taken_out:
+            if isinstance(product['out_timestamp'], datetime):
+                product['out_timestamp'] = product['out_timestamp'].strftime('%Y-%m-%d %H:%M:%S')
+                
+        cursor.close()
+        connection.close()
+        
+        return jsonify({'products_out': products_taken_out}), 200
+    except Exception as e:
+        print(f"Error fetching products taken out: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/available_products.html')
+def serve_available_products_page():
+    return send_from_directory(app.static_folder, 'available_products.html')
+
+@app.route('/available_products', methods=['GET'])
+def get_available_products():
+    try:
+        connection = get_db_connection()
+        if connection is None:
+            return jsonify({'error': 'Database connection failed'}), 500
+        
+        cursor = connection.cursor(dictionary=True)
+        
+        # Step 1: Get all products from cognex_product_pool
+        cursor.execute("SELECT Product_Serial_Number, Product_Description, Product_Part_Name FROM cognex_product_pool")
+        all_products = cursor.fetchall()
+        
+        # Step 2: Get all products that are out from cognex_units
+        cursor.execute("""
+            SELECT DISTINCT Product_Serial_Number 
+            FROM cognex_units
+            WHERE Status = 'out'
+        """)
+        out_products = cursor.fetchall()
+
+        # Step 3: Filter out products that are marked as 'out'
+        out_product_serial_numbers = [product['Product_Serial_Number'] for product in out_products]
+        
+        # Filter products to only include those that are not in the out_products list
+        available_products = [product for product in all_products if product['Product_Serial_Number'] not in out_product_serial_numbers]
+        
+        cursor.close()
+        connection.close()
+        
+        # Return the available products
+        return jsonify({'available_products': available_products}), 200
+    except Exception as e:
+        print(f"Error fetching available products: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
-    # app.run(host='192.168.12.107', port=5252, debug=True)
+    # server = app.run(host='192.168.1.11', port=5252, debug=True)
     app.run(host='0.0.0.0', port=5252, debug=True)
-
-
-
